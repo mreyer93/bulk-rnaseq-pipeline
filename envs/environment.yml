@@ -1,0 +1,20 @@
+# Upstream environment: read QC, trimming, alignment and quantification.
+# Create with:  mamba env create -f envs/environment.yml -n bulk-rnaseq
+#
+# Versions were current as of 2026-08 and are pinned for reproducibility rather than
+# frozen forever - re-check with `mamba search <pkg>` and bump deliberately.
+name: bulk-rnaseq
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.10
+  - snakemake>=7.32,<8
+  - salmon=2.6
+  - fastp=1.3
+  - fastqc
+  - multiqc
+  - samtools=1.23
+  # STAR is only needed for the star_salmon path (cloud/server). It is safe to install
+  # everywhere - it just won't be invoked when quantifier is 'salmon'.
+  - star=2.7

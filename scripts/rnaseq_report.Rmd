@@ -1,0 +1,415 @@
+---
+title: "`r params$project_name`"
+subtitle: "Bulk RNA-seq analysis report"
+date: "`r format(Sys.time(), '%Y-%m-%d')`"
+params:
+  project_name: "Bulk RNA-seq analysis"
+  outdir: "results"
+  scripts_dir: "."
+  design: "condition"
+  contrasts: ""
+  alpha: 0.05
+  lfc_threshold: 0
+  top_n: 40
+  quantifier: "salmon"
+  run_de: true
+  de_problems: ""
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    self_contained: true
+    theme: flatly
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    latex_engine: tectonic
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      fig.width = 9, fig.height = 4.8, dpi = 150)
+suppressPackageStartupMessages({
+    library(ggplot2)
+    library(knitr)
+})
+outdir <- params$outdir
+alpha <- as.numeric(params$alpha)
+lfc_thresh <- as.numeric(params$lfc_threshold)
+top_n <- as.integer(params$top_n)
+run_de <- isTRUE(params$run_de) || identical(params$run_de, "TRUE")
+contrast_names <- if (nzchar(params$contrasts)) strsplit(params$contrasts, ",")[[1]] else character(0)
+
+PALETTE <- c("#4C72B0", "#DD8452", "#55A868", "#C44E52", "#8172B3",
+             "#937860", "#DA8BC3", "#8C8C8C", "#CCB974", "#64B5CD")
+rtheme <- function() {
+    theme_bw(base_size = 11) +
+        theme(panel.grid.minor = element_blank(),
+              strip.background = element_rect(fill = "grey92", colour = NA),
+              plot.title = element_text(face = "bold", size = 12))
+}
+note_missing <- function(what) {
+    cat("\n*", what, "was not available for this run - this section is omitted.*\n\n")
+}
+# Point labels: use ggrepel when it happens to be installed, otherwise a nudged
+# geom_text. Keeps ggrepel an optional rather than a required dependency.
+point_labels <- function() {
+    if (requireNamespace("ggrepel", quietly = TRUE)) {
+        ggrepel::geom_text_repel(aes(label = sample), size = 3, show.legend = FALSE,
+                                 max.overlaps = 20)
+    } else {
+        geom_text(aes(label = sample), size = 3, vjust = -0.9, show.legend = FALSE)
+    }
+}
+read_tsv_safe <- function(path, ...) {
+    if (!file.exists(path)) return(NULL)
+    out <- tryCatch(read.delim(path, check.names = FALSE, ...), error = function(e) NULL)
+    if (is.null(out) || nrow(out) == 0) return(NULL)
+    out
+}
+
+counts  <- read_tsv_safe(file.path(outdir, "03_quant", "gene_counts.tsv"), row.names = 1)
+tpm     <- read_tsv_safe(file.path(outdir, "03_quant", "gene_tpm.tsv"), row.names = 1)
+vst     <- read_tsv_safe(file.path(outdir, "04_de", "vst.tsv"), row.names = 1)
+coldata <- read_tsv_safe(file.path(outdir, "04_de", "coldata.tsv"), row.names = 1)
+
+# Salmon writes per-sample mapping statistics to aux_info/meta_info.json
+read_salmon_meta <- function(outdir) {
+    d <- file.path(outdir, "03_quant", "salmon")
+    if (!dir.exists(d)) return(NULL)
+    samples <- list.dirs(d, recursive = FALSE, full.names = FALSE)
+    rows <- lapply(samples, function(s) {
+        f <- file.path(d, s, "aux_info", "meta_info.json")
+        if (!file.exists(f)) return(NULL)
+        txt <- paste(readLines(f, warn = FALSE), collapse = " ")
+        num <- function(key) {
+            m <- regmatches(txt, regexpr(paste0('"', key, '"\\s*:\\s*[0-9.eE+-]+'), txt))
+            if (length(m) == 0) return(NA_real_)
+            suppressWarnings(as.numeric(sub('.*:\\s*', '', m)))
+        }
+        lib <- regmatches(txt, regexpr('"library_types"\\s*:\\s*\\[\\s*"[^"]*"', txt))
+        data.frame(sample = s,
+                   num_processed = num("num_processed"),
+                   num_mapped = num("num_mapped"),
+                   percent_mapped = num("percent_mapped"),
+                   library_type = if (length(lib)) sub('.*"([^"]*)"$', "\\1", lib) else NA_character_,
+                   stringsAsFactors = FALSE)
+    })
+    rows <- Filter(Negate(is.null), rows)
+    if (length(rows) == 0) return(NULL)
+    do.call(rbind, rows)
+}
+salmon_meta <- read_salmon_meta(outdir)
+
+summary_dir <- file.path(outdir, "05_report", "summary_tables")
+dir.create(summary_dir, recursive = TRUE, showWarnings = FALSE)
+write_summary <- function(df, name) {
+    if (is.null(df) || nrow(df) == 0) return(invisible(NULL))
+    write.table(df, file.path(summary_dir, paste0(name, ".tsv")),
+                sep = "\t", quote = FALSE, row.names = FALSE)
+}
+```
+
+# Overview
+
+```{r overview}
+ov <- data.frame(
+    Item = c("Samples", "Genes quantified", "Quantification",
+             "Differential expression", "Design", "Contrasts",
+             "Significance threshold"),
+    Value = c(
+        if (!is.null(counts)) ncol(counts) else NA,
+        if (!is.null(counts)) nrow(counts) else NA,
+        if (params$quantifier == "salmon") "Salmon (selective alignment)" else "STAR + Salmon",
+        if (run_de) "DESeq2" else "not run",
+        if (run_de) paste0("~", params$design) else "-",
+        if (length(contrast_names)) paste(contrast_names, collapse = ", ") else "-",
+        sprintf("adjusted p < %g%s", alpha,
+                if (lfc_thresh > 0) sprintf(", |log2FC| >= %g", lfc_thresh) else "")
+    ), stringsAsFactors = FALSE)
+ov <- ov[!is.na(ov$Value) & ov$Value != "-", ]
+kable(ov, caption = "Analysis summary")
+write_summary(ov, "run_overview")
+```
+
+`r if (!run_de && nzchar(params$de_problems)) paste0("**Differential expression was not run.** ", params$de_problems, "\n\nQuantification and QC results below are complete and usable; add or correct the design/condition columns in the sample sheet to enable DE.")`
+
+Gene-level counts were produced with
+`r if (params$quantifier == "salmon") "Salmon selective alignment" else "STAR genomic alignment followed by Salmon quantification"`
+and aggregated with tximport using length-scaled TPM, which corrects for both library
+size and transcript-length differences between samples.
+
+# Quality control
+
+## Mapping rates
+
+```{r mapping}
+if (is.null(salmon_meta)) {
+    note_missing("Salmon mapping statistics")
+} else {
+    m <- salmon_meta
+    m$percent_mapped <- round(m$percent_mapped, 2)
+    write_summary(m, "mapping_rates")
+    kable(m[order(m$percent_mapped), ],
+          row.names = FALSE, digits = 2,
+          col.names = c("Sample", "Reads processed", "Reads mapped", "% mapped", "Library type"),
+          caption = "Salmon mapping statistics")
+}
+```
+
+```{r mapping-plot, fig.height=3.6}
+if (!is.null(salmon_meta)) {
+    ggplot(salmon_meta, aes(x = reorder(sample, percent_mapped), y = percent_mapped)) +
+        geom_col(fill = PALETTE[1]) +
+        geom_hline(yintercept = 70, linetype = "dashed", colour = "grey35") +
+        coord_flip() +
+        labs(title = "Mapping rate by sample",
+             subtitle = "dashed line = 70%, a common minimum for usable bulk RNA-seq",
+             x = NULL, y = "% reads mapped") +
+        rtheme()
+}
+```
+
+`r if (!is.null(salmon_meta)) "Samples mapping well below the rest of the batch usually indicate contamination, the wrong reference, or degraded input material. Treat expression estimates from such samples cautiously."`
+
+## Library size and gene detection
+
+```{r libsize, fig.height=3.6}
+if (is.null(counts)) {
+    note_missing("Count matrix")
+} else {
+    ls_df <- data.frame(sample = colnames(counts),
+                        total_counts = colSums(counts),
+                        genes_detected = colSums(counts > 0),
+                        stringsAsFactors = FALSE)
+    write_summary(ls_df, "library_sizes")
+    kable(ls_df, row.names = FALSE, digits = 0,
+          col.names = c("Sample", "Total counts", "Genes detected"),
+          caption = "Library size and number of detected genes")
+    print(
+        ggplot(ls_df, aes(x = reorder(sample, total_counts), y = total_counts / 1e6)) +
+            geom_col(fill = PALETTE[3]) + coord_flip() +
+            labs(title = "Library size", x = NULL, y = "Counts (millions)") + rtheme()
+    )
+}
+```
+
+# Sample relationships
+
+```{r pca, fig.height=4.6}
+mat <- if (!is.null(vst)) as.matrix(vst) else if (!is.null(tpm)) log2(as.matrix(tpm) + 1) else NULL
+if (is.null(mat) || ncol(mat) < 2) {
+    note_missing("Expression matrix for ordination")
+} else {
+    vars <- apply(mat, 1, var)
+    keep <- head(order(vars, decreasing = TRUE), min(500, sum(vars > 0)))
+    if (length(keep) < 2) {
+        note_missing("Enough variable genes for PCA")
+    } else {
+        pca <- prcomp(t(mat[keep, , drop = FALSE]), scale. = FALSE)
+        pv <- round(100 * pca$sdev^2 / sum(pca$sdev^2), 1)
+        pdat <- data.frame(sample = rownames(pca$x),
+                           PC1 = pca$x[, 1],
+                           PC2 = if (ncol(pca$x) > 1) pca$x[, 2] else 0,
+                           stringsAsFactors = FALSE)
+        grp_col <- NULL
+        if (!is.null(coldata)) {
+            cand <- intersect(strsplit(params$design, "[ +~*:]+")[[1]], colnames(coldata))
+            cand <- cand[nzchar(cand)]
+            if (length(cand)) {
+                grp_col <- cand[1]
+                pdat[[grp_col]] <- coldata[pdat$sample, grp_col]
+            }
+        }
+        write_summary(pdat, "pca_coordinates")
+        p <- ggplot(pdat, aes(x = PC1, y = PC2,
+                              colour = if (!is.null(grp_col)) .data[[grp_col]] else NULL))
+        print(
+            p + geom_point(size = 3.2) +
+                point_labels() +
+                scale_colour_manual(values = PALETTE, na.value = "grey50",
+                                    name = grp_col) +
+                labs(title = "Principal component analysis",
+                     subtitle = "top 500 most variable genes",
+                     x = sprintf("PC1 (%.1f%%)", pv[1]),
+                     y = sprintf("PC2 (%.1f%%)", if (length(pv) > 1) pv[2] else 0)) +
+                rtheme()
+        )
+    }
+}
+```
+
+```{r corr-heatmap, fig.height=5}
+if (!is.null(mat) && ncol(mat) >= 2) {
+    cm <- cor(mat, method = "spearman")
+    cdf <- expand.grid(x = rownames(cm), y = colnames(cm), stringsAsFactors = FALSE)
+    cdf$r <- as.vector(cm)
+    print(
+        ggplot(cdf, aes(x = x, y = y, fill = r)) +
+            geom_tile() +
+            geom_text(aes(label = sprintf("%.2f", r)), size = 2.6, colour = "grey15") +
+            scale_fill_gradient(low = "#F7F7F7", high = PALETTE[1], name = "Spearman r") +
+            labs(title = "Sample-to-sample correlation", x = NULL, y = NULL) +
+            rtheme() +
+            theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    )
+    write_summary(data.frame(sample = rownames(cm), cm, check.names = FALSE),
+                  "sample_correlation")
+}
+```
+
+`r if (!is.null(mat)) "Samples from the same experimental group are expected to cluster together. A sample sitting with the wrong group, or far from everything else, is worth investigating before interpreting the differential expression results."`
+
+# Differential expression
+
+```{r de-setup}
+de_tables <- list()
+if (run_de && length(contrast_names)) {
+    for (cn in contrast_names) {
+        f <- file.path(outdir, "04_de", cn, "results.tsv")
+        d <- read_tsv_safe(f)
+        if (!is.null(d)) de_tables[[cn]] <- d
+    }
+}
+```
+
+```{r de-summary}
+if (length(de_tables) == 0) {
+    note_missing("Differential expression results")
+} else {
+    summ <- do.call(rbind, lapply(names(de_tables), function(cn) {
+        d <- de_tables[[cn]]
+        sig <- !is.na(d$padj) & d$padj < alpha & abs(d$log2FoldChange) >= lfc_thresh
+        data.frame(Contrast = cn,
+                   Tested = sum(!is.na(d$padj)),
+                   Significant = sum(sig),
+                   Up = sum(sig & d$log2FoldChange > 0),
+                   Down = sum(sig & d$log2FoldChange < 0),
+                   stringsAsFactors = FALSE)
+    }))
+    write_summary(summ, "de_summary")
+    kable(summ, row.names = FALSE, caption = sprintf(
+        "Differentially expressed genes (adjusted p < %g%s)", alpha,
+        if (lfc_thresh > 0) sprintf(", |log2FC| >= %g", lfc_thresh) else ""))
+}
+```
+
+```{r de-plots, results='asis', fig.height=4.4}
+for (cn in names(de_tables)) {
+    d <- de_tables[[cn]]
+    cat("\n\n##", cn, "\n\n")
+    d$sig <- !is.na(d$padj) & d$padj < alpha & abs(d$log2FoldChange) >= lfc_thresh
+    d$direction <- ifelse(!d$sig, "n.s.",
+                          ifelse(d$log2FoldChange > 0, "up", "down"))
+
+    # Volcano
+    dv <- d[is.finite(d$log2FoldChange) & !is.na(d$padj), ]
+    if (nrow(dv) > 0) {
+        dv$neglog10p <- -log10(pmax(dv$padj, .Machine$double.xmin))
+        p <- ggplot(dv, aes(x = log2FoldChange, y = neglog10p, colour = direction)) +
+            geom_point(alpha = 0.6, size = 1.3) +
+            scale_colour_manual(values = c("up" = PALETTE[4], "down" = PALETTE[1],
+                                           "n.s." = "grey78"), name = NULL) +
+            geom_hline(yintercept = -log10(alpha), linetype = "dashed", colour = "grey40") +
+            labs(title = paste("Volcano plot -", cn),
+                 x = "log2 fold change", y = "-log10 adjusted p") +
+            rtheme()
+        print(p)
+    }
+
+    # MA
+    dm <- d[is.finite(d$baseMean) & d$baseMean > 0, ]
+    if (nrow(dm) > 0) {
+        p <- ggplot(dm, aes(x = baseMean, y = log2FoldChange, colour = direction)) +
+            geom_point(alpha = 0.6, size = 1.1) +
+            scale_x_log10() +
+            scale_colour_manual(values = c("up" = PALETTE[4], "down" = PALETTE[1],
+                                           "n.s." = "grey78"), name = NULL) +
+            geom_hline(yintercept = 0, colour = "grey30") +
+            labs(title = paste("MA plot -", cn),
+                 x = "mean normalised count (log scale)", y = "log2 fold change") +
+            rtheme()
+        print(p)
+    }
+
+    # Top genes table
+    dsig <- d[d$sig, ]
+    dsig <- dsig[order(dsig$padj, -abs(dsig$log2FoldChange)), ]
+    show <- head(dsig, top_n)
+    if (nrow(show) > 0) {
+        cols <- intersect(c("gene_id", "gene_name", "baseMean", "log2FoldChange", "padj"),
+                          colnames(show))
+        print(kable(show[, cols], row.names = FALSE, digits = c(0, 0, 1, 3, 6),
+                    caption = sprintf("Top %d significant genes - %s", nrow(show), cn)))
+        write_summary(show[, cols], paste0("top_genes_", gsub("[^A-Za-z0-9_.-]", "_", cn)))
+    } else {
+        cat("\n*No genes passed the significance threshold for this contrast.*\n\n")
+    }
+}
+```
+
+```{r heatmap, fig.height=6}
+if (length(de_tables) > 0 && !is.null(vst)) {
+    d <- de_tables[[1]]
+    d <- d[!is.na(d$padj), ]
+    d <- d[order(d$padj), ]
+    genes <- head(d$gene_id, 30)
+    genes <- intersect(genes, rownames(vst))
+    if (length(genes) >= 2) {
+        m <- as.matrix(vst[genes, , drop = FALSE])
+        # centre each gene so the heatmap shows relative, not absolute, expression
+        m <- t(scale(t(m), center = TRUE, scale = FALSE))
+        labels <- genes
+        if ("gene_name" %in% colnames(d)) {
+            nm <- d$gene_name[match(genes, d$gene_id)]
+            labels <- ifelse(is.na(nm) | nm == "", genes, nm)
+        }
+        hdf <- expand.grid(gene = labels, sample = colnames(m),
+                           stringsAsFactors = FALSE)
+        hdf$value <- as.vector(m)
+        hdf$gene <- factor(hdf$gene, levels = rev(labels))
+        print(
+            ggplot(hdf, aes(x = sample, y = gene, fill = value)) +
+                geom_tile() +
+                scale_fill_gradient2(low = PALETTE[1], mid = "white", high = PALETTE[4],
+                                     midpoint = 0, name = "centred\nexpression") +
+                labs(title = paste("Top differential genes -", names(de_tables)[1]),
+                     subtitle = "variance-stabilised, gene-centred",
+                     x = NULL, y = NULL) +
+                rtheme() +
+                theme(axis.text.x = element_text(angle = 45, hjust = 1),
+                      axis.text.y = element_text(size = 7))
+        )
+    }
+}
+```
+
+# Methods and provenance
+
+```{r provenance}
+prov <- data.frame(
+    Item = c("Report generated", "Quantification", "Aggregation",
+             "Differential expression", "Output directory"),
+    Value = c(format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+              if (params$quantifier == "salmon") "Salmon selective alignment"
+              else "STAR alignment + Salmon quantification",
+              "tximport, length-scaled TPM",
+              if (run_de) sprintf("DESeq2, design ~%s", params$design) else "not run",
+              normalizePath(outdir, mustWork = FALSE)),
+    stringsAsFactors = FALSE)
+kable(prov, row.names = FALSE, caption = "Provenance")
+```
+
+Tables behind every figure are written to `05_report/summary_tables/` as TSV, and full
+per-contrast results (all genes, not only significant ones) are in
+`04_de/<contrast>/results.tsv`.
+
+**Interpretation caveats.** Adjusted p-values control the false discovery rate across
+genes within a contrast, not across contrasts. Fold changes for very lowly expressed
+genes are unstable even after shrinkage; the `baseMean` column indicates how much
+evidence supports each gene. Statistical significance is not biological importance -
+a small, reproducible change in a key regulator may matter more than a large change in
+an abundant structural transcript. Batch effects that are confounded with the condition
+of interest cannot be corrected by any model and must be addressed in the experimental
+design.

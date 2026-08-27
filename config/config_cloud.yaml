@@ -1,0 +1,58 @@
+# Cloud / server configuration.
+#
+# Uses STAR genomic alignment followed by Salmon quantification - nf-core/rnaseq's
+# default. Compared with the local Salmon-only path this additionally gives you a
+# coordinate-sorted genomic BAM (for IGV, coverage tracks, or variant work) and splice
+# junction output, at the cost of needing ~30-40 GB RAM for a human STAR index.
+#
+# Do not run this on a 16 GB machine - STAR will be killed partway through indexing.
+# See cloud/gcp/README.md for provisioning a suitable VM.
+
+project_name: "My RNA-seq project (cloud)"
+
+samplesheet: "config/samples.csv"
+outdir: "results"
+
+# ---------------------------------------------------------------- quantification ---
+quantifier: "star_salmon"
+trimmer: "fastp"
+
+reference:
+  # STAR index is built from genome + GTF; Salmon then quantifies the transcriptome BAM,
+  # so the transcriptome FASTA is required here as well and must match the same release.
+  genome_fasta: "/mnt/data/reference/genome.fa"
+  gtf: "/mnt/data/reference/annotation.gtf"
+  transcriptome_fasta: "/mnt/data/reference/transcriptome.fa"
+  # Building a human STAR index takes ~1 hour and ~30 GB RAM. Build it once, then point
+  # subsequent runs at it to skip that entirely:
+  # star_index: "/mnt/data/reference/star_index"
+
+strip_tx_version: false
+
+# Read length minus 1 is STAR's recommended sjdbOverhang (100 suits 101 bp reads and is
+# a reasonable default for most modern libraries).
+star_sjdb_overhang: 100
+# Cap STAR's index-building memory if the VM is shared; 0 means no limit.
+star_limit_ram: 0
+
+# ------------------------------------------------------------ differential expr. ---
+design: "condition"
+contrasts:
+  - ["condition", "treated", "control"]
+
+alpha: 0.05
+lfc_threshold: 0
+min_count: 10
+
+# ------------------------------------------------------------------------ report ---
+make_report: true
+report_pdf: true
+report_top_n: 60
+
+# ---------------------------------------------------------------------- resources ---
+# Sized for a 16 vCPU / 64 GB VM (see cloud/gcp/config.sh).
+threads:
+  trim: 8
+  index: 16
+  quant: 8
+  align: 16

@@ -1,0 +1,32 @@
+# Pipeline outputs and downloaded data - large, regenerable, project-specific
+results/
+test/data/
+*.bam
+*.bai
+*.fastq
+*.fastq.gz
+*.fq.gz
+reference/
+references/
+*_index/
+
+# Snakemake
+.snakemake/
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Local editor/session settings
+.claude/
+.vscode/

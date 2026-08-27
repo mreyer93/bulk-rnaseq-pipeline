@@ -1,0 +1,51 @@
+"""
+Bulk RNA-seq pipeline: FASTQ -> QC -> quantification -> differential expression -> report.
+
+Tool choices follow nf-core/rnaseq, the community reference implementation:
+  fastp -> Salmon (selective alignment) or STAR + Salmon -> tximport -> DESeq2
+
+Two quantification paths are available and produce identical downstream outputs:
+  quantifier: salmon        ~4-8 GB RAM   - laptops / small servers  (config/config_local.yaml)
+  quantifier: star_salmon   ~32 GB RAM    - servers / cloud VMs      (config/config_cloud.yaml)
+
+Run:
+  snakemake --configfile config/config_local.yaml --use-conda --cores 4
+Check first without running anything:
+  snakemake --configfile config/config_local.yaml -n
+"""
+
+from snakemake.exceptions import WorkflowError
+
+include: "rules/common.smk"
+include: "rules/qc.smk"
+include: "rules/quantify.smk"
+include: "rules/analysis.smk"
+
+
+rule all:
+    input: final_outputs()
+
+
+onsuccess:
+    print("\n" + "=" * 72)
+    print("  Pipeline finished.")
+    print(f"  Report        : {join(OUTDIR, '05_report', 'rnaseq_report.html')}")
+    print(f"  QC            : {join(OUTDIR, '00_qc', 'multiqc_report.html')}")
+    print(f"  Gene counts   : {join(OUTDIR, '03_quant', 'gene_counts.tsv')}")
+    if RUN_DE and CONTRAST_NAMES:
+        print(f"  DE results    : {join(OUTDIR, '04_de')}/<contrast>/results.tsv")
+    print("=" * 72 + "\n")
+
+
+onerror:
+    print("\n" + "=" * 72)
+    print("  Pipeline FAILED.")
+    print(f"  Per-rule logs are under {join(OUTDIR, 'logs')}/ - the failing rule's log")
+    print("  usually names the cause directly.")
+    print("  Common causes:")
+    print("   - reference FASTA and GTF from different annotation releases")
+    print("     (tximport reports the transcript-ID overlap; near-zero means this)")
+    print("   - STAR out of memory: use quantifier 'salmon' instead, or a bigger machine")
+    print("   - design/contrast not matching the sample sheet: re-run")
+    print("     python scripts/samplesheet.py <sheet> <design> <factor,num,den>")
+    print("=" * 72 + "\n")

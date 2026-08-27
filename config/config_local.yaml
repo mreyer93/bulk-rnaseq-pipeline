@@ -1,0 +1,61 @@
+# Local / laptop configuration.
+#
+# Uses Salmon selective alignment straight from FASTQ (~4-8 GB RAM for human), which is
+# what makes this runnable on a machine that cannot host a STAR index. STAR needs roughly
+# 30 GB of RAM for a human genome - see config_cloud.yaml for that path.
+#
+# Copy this file, point the paths at your data, and run:
+#   snakemake --configfile my_config.yaml --use-conda --cores 4
+
+project_name: "My RNA-seq project"
+
+# Sample sheet: CSV or TSV. Required columns: a sample name and a first FASTQ.
+# Common aliases are understood (sample/sample_id/Sample_ID, fastq_1/R1/read1/forward...).
+# Repeat a sample name across rows to merge multiple lanes/runs.
+# Add a 'condition' column (or any other metadata columns) to enable differential expression.
+samplesheet: "config/samples_example.csv"
+
+outdir: "results"
+
+# ---------------------------------------------------------------- quantification ---
+quantifier: "salmon"          # salmon | star_salmon
+trimmer: "fastp"              # fastp | none
+
+reference:
+  # REQUIRED for the salmon path: transcriptome FASTA (cDNA) and the matching GTF.
+  # Both must come from the same annotation release - see docs/usage.md.
+  transcriptome_fasta: "/path/to/reference/transcriptome.fa"
+  gtf: "/path/to/reference/annotation.gtf"
+  # Optional: reuse a prebuilt Salmon index instead of building one each run
+  # salmon_index: "/path/to/reference/salmon_index"
+
+# Set true when transcript IDs carry version suffixes in one file but not the other
+# (e.g. ENST00000123.4 vs ENST00000123)
+strip_tx_version: false
+
+# ------------------------------------------------------------ differential expr. ---
+# DESeq2 design, referring to columns in the sample sheet. Put the variable of interest
+# last (e.g. "batch + condition" adjusts for batch while testing condition).
+design: "condition"
+
+# Contrasts as [factor, numerator, denominator]. The log2 fold change is
+# numerator relative to denominator. Leave empty to report the last model coefficient.
+contrasts:
+  - ["condition", "treated", "control"]
+
+alpha: 0.05                   # adjusted-p significance threshold
+lfc_threshold: 0              # optional |log2FC| threshold applied on top of alpha
+min_count: 10                 # drop genes whose total count across samples is below this
+
+# ------------------------------------------------------------------------ report ---
+make_report: true
+report_pdf: true              # needs tectonic (in envs/r.yml); set false to skip
+report_top_n: 40
+
+# ---------------------------------------------------------------------- resources ---
+# Sized for a 4-core laptop. Raise on a bigger machine.
+threads:
+  trim: 2
+  index: 4
+  quant: 4
+  align: 4

@@ -1,0 +1,5 @@
+sample,fastq_1,fastq_2,condition,batch
+SAMPLE_A,/path/to/fastq/SAMPLE_A_R1.fastq.gz,/path/to/fastq/SAMPLE_A_R2.fastq.gz,control,batch1
+SAMPLE_B,/path/to/fastq/SAMPLE_B_R1.fastq.gz,/path/to/fastq/SAMPLE_B_R2.fastq.gz,control,batch2
+SAMPLE_C,/path/to/fastq/SAMPLE_C_R1.fastq.gz,/path/to/fastq/SAMPLE_C_R2.fastq.gz,treated,batch1
+SAMPLE_D,/path/to/fastq/SAMPLE_D_R1.fastq.gz,/path/to/fastq/SAMPLE_D_R2.fastq.gz,treated,batch2

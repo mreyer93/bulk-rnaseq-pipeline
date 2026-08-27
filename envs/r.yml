@@ -1,0 +1,19 @@
+# R environment: count aggregation, differential expression and report rendering.
+# Kept separate from envs/environment.yml because the Bioconductor stack is a large,
+# slow-to-solve dependency set that the upstream (FASTQ-handling) rules do not need.
+name: bulk-rnaseq-r
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base>=4.3
+  - bioconductor-deseq2
+  - bioconductor-tximport
+  - r-ashr            # lfcShrink(type="ashr"): works on arbitrary contrasts
+  - r-ggplot2
+  - r-knitr
+  - r-rmarkdown
+  - r-data.table
+  - r-ggrepel         # optional; the report falls back to geom_text without it
+  - pandoc
+  - tectonic          # LaTeX engine for the PDF report
