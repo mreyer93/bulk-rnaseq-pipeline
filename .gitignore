@@ -1,5 +1,7 @@
-# Pipeline outputs and downloaded data - large, regenerable, project-specific
-results/
+# Pipeline outputs and downloaded data - large, regenerable, project-specific.
+# Anchored to the repo root so the committed worked example under example/results/
+# is not swept up by the same rule.
+/results/
 test/data/
 *.bam
 *.bai

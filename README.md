@@ -42,6 +42,15 @@ Verify the whole thing works first on a small public dataset (~28 MB, a couple o
 ./test/run_test.sh
 ```
 
+## Worked example
+
+[`example/`](example/README.md) is a complete run on public yeast RNA-seq (RAP1 depletion,
+GSE110004) with the figures committed, so you can see what the pipeline produces without
+running it: PCA separating three conditions on 90% of the variance, per-contrast volcano
+plots, a top-gene heatmap, and the differential expression tables behind them.
+
+[![PCA](example/figures/pca.png)](example/README.md)
+
 ## Sample sheets
 
 CSV or TSV. The only hard requirements are a sample-name column and a first-FASTQ column;
