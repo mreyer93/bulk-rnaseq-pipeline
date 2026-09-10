@@ -110,3 +110,10 @@ a persistent data disk for references, with start/stop scripts to control cost.
 - [STAR](https://github.com/alexdobin/STAR) — Dobin et al., *Bioinformatics* 2013
 - [tximport](https://bioconductor.org/packages/tximport/) — Soneson et al., *F1000Research* 2015
 - [DESeq2](https://bioconductor.org/packages/DESeq2/) — Love et al., *Genome Biology* 2014
+
+## License
+
+Apache License 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Third-party tools used by this repository are downloaded at run time and are not
+redistributed here; each keeps its own licence.

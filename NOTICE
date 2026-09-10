@@ -1,0 +1,15 @@
+bulk-rnaseq-pipeline
+Copyright 2026 Matthew Reyer
+
+This product includes software developed by Matthew Reyer
+(https://github.com/mreyer93).
+
+Licensed under the Apache License, Version 2.0. See LICENSE for the full text.
+
+Third-party tools invoked by these workflows are downloaded at run time via conda
+and are NOT redistributed here. Each remains under its own licence, unaffected by
+the Apache-2.0 licence above. Notable components include Snakemake (MIT), fastp
+(MIT), Salmon (GPL-3.0), STAR (MIT), tximport (GPL-2.0), and DESeq2 (LGPL-3.0).
+
+Reference annotation (Ensembl, GENCODE) carries its own terms and is not
+redistributed here.
