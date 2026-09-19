@@ -100,6 +100,10 @@ snakemake -s workflow/Snakefile \
     $CONDA_FLAG \
     $DRY_RUN
 
+echo
+echo "==> TE annotation builder self-test"
+python3 "$(dirname "$0")/../scripts/make_te_gtf.py" --selftest || exit 1
+
 if [[ -z "$DRY_RUN" ]]; then
     echo
     echo "==> Checking expected outputs"

@@ -37,6 +37,47 @@ curl -O https://ftp.ensembl.org/pub/release-$REL/fasta/$SP/dna/Homo_sapiens.GRCh
 If transcript IDs carry version suffixes in one file but not the other
 (`ENST00000123.4` vs `ENST00000123`), set `strip_tx_version: true`.
 
+## 2b. Transposable element annotation (optional)
+
+Needed only if you want to quantify transposable elements and endogenous retroviruses
+alongside genes. Skip this if you only care about gene-level expression.
+
+`scripts/make_te_gtf.py` builds a TEtranscripts-compatible GTF from the UCSC RepeatMasker
+track for any assembly UCSC hosts:
+
+```
+python scripts/make_te_gtf.py --genome mm39 --out references/mm39_TE.gtf
+python scripts/make_te_gtf.py --genome hg38 --out references/hg38_TE.gtf
+```
+
+It is generated rather than downloaded on purpose. The prebuilt TE GTFs that TEtranscripts
+documents are distributed by hand, and the lab file-share URL most tutorials cite now
+returns 404. UCSC's RepeatMasker track is a stable, versioned source, so building from it
+keeps the annotation reproducible.
+
+By default it keeps LINE, SINE, LTR, DNA, Retroposon and RC elements, and drops simple
+repeats, low-complexity regions, satellites and the small-RNA classes. Those are
+repetitive but are not transposable elements, and including them inflates the count matrix
+with features nobody will interpret. Override with `--classes` (or `--classes all`).
+
+Check the build without running the pipeline:
+
+```
+python scripts/make_te_gtf.py --selftest
+```
+
+On mouse mm39 the output should contain the ERV families that matter for
+chromatin-repression work, including the IAP elements (`IAPEz-int`, `IAPLTR*`), `MusD`/`ETn`
+and `MMERVK10C-int`.
+
+*One alignment caveat that decides whether TE analysis is even possible.* TE quantification
+depends on multi-mapping reads, because young high-copy elements are near-identical across
+loci. TEtranscripts' authors recommend `--winAnchorMultimapNmax 100 --outFilterMultimapNmax 100`
+for STAR. STAR's default is 10, so BAMs produced by a standard pipeline (including most
+sequencing-core deliverables) have already discarded the reads a TE analysis needs. If you
+are handed BAMs rather than FASTQs, check the STAR command in the BAM header before
+promising a TE result.
+
 ## 3. Sample sheet
 
 CSV or TSV; the separator is detected. Only a sample-name column and a first-FASTQ column
