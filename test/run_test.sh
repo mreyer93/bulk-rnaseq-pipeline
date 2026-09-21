@@ -104,6 +104,10 @@ echo
 echo "==> TE annotation builder self-test"
 python3 "$(dirname "$0")/../scripts/make_te_gtf.py" --selftest || exit 1
 
+echo
+echo "==> MultiQC extractor self-test"
+python3 "$(dirname "$0")/../scripts/multiqc_extract.py" --selftest || exit 1
+
 if [[ -z "$DRY_RUN" ]]; then
     echo
     echo "==> Checking expected outputs"

@@ -78,6 +78,25 @@ sequencing-core deliverables) have already discarded the reads a TE analysis nee
 are handed BAMs rather than FASTQs, check the STAR command in the BAM header before
 promising a TE result.
 
+## 2c. Starting from a vendor's QC report
+
+If a sequencing provider handed over MultiQC HTML and little else, the per-sample numbers
+are still recoverable. MultiQC 1.x compresses its plot data inside the page, so the values
+cannot be grepped and the report looks like a dead end. It is not:
+
+```
+python scripts/multiqc_extract.py --list multiqc_report.html
+python scripts/multiqc_extract.py multiqc_report.html --outdir metrics/
+```
+
+One TSV per plot, samples as rows and series as columns, with a `total` column added. This
+is enough to audit alignment rates, library sizes and featureCounts assignment across a
+study before any of the primary data arrives, and it is often enough to settle
+strandedness: run the provider's counts three ways and the correct setting assigns an
+order of magnitude more reads than the wrong one.
+
+Needs `pip install lzstring` for the compressed flavour.
+
 ## 3. Sample sheet
 
 CSV or TSV; the separator is detected. Only a sample-name column and a first-FASTQ column
