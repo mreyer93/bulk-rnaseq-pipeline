@@ -19,6 +19,7 @@ from snakemake.exceptions import WorkflowError
 include: "rules/common.smk"
 include: "rules/qc.smk"
 include: "rules/quantify.smk"
+include: "rules/te.smk"
 include: "rules/analysis.smk"
 
 
@@ -32,6 +33,8 @@ onsuccess:
     print(f"  Report        : {join(OUTDIR, '05_report', 'rnaseq_report.html')}")
     print(f"  QC            : {join(OUTDIR, '00_qc', 'multiqc_report.html')}")
     print(f"  Gene counts   : {join(OUTDIR, '03_quant', 'gene_counts.tsv')}")
+    if TE_ENABLED:
+        print(f"  TE counts     : {join(OUTDIR, '06_te', 'te_counts.tsv')}")
     if RUN_DE and CONTRAST_NAMES:
         print(f"  DE results    : {join(OUTDIR, '04_de')}/<contrast>/results.tsv")
     print("=" * 72 + "\n")

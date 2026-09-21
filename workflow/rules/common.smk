@@ -36,6 +36,8 @@ config.setdefault("report_pdf", True)
 config.setdefault("project_name", "Bulk RNA-seq analysis")
 config.setdefault("report_top_n", 40)
 config.setdefault("gsea", False)
+config.setdefault("te_analysis", {})               # see rules/te.smk
+config.setdefault("concordance", {})               # see rules/analysis.smk
 config.setdefault("threads", {})
 config["threads"].setdefault("trim", 4)
 config["threads"].setdefault("index", 8)
@@ -154,6 +156,13 @@ def _require_reference(*keys):
     return [ref[k] for k in keys]
 
 
+# ------------------------------------------------------------ TE analysis flags ---
+# Parsed here rather than in rules/te.smk because rules/quantify.smk needs to know
+# whether a STAR index will be required: the TE path needs one even when the quantifier
+# is salmon, and quantify.smk is included first.
+TE_CFG = config.get("te_analysis", {}) or {}
+TE_ENABLED = bool(TE_CFG.get("enabled", False))
+
 # Salmon index: use a prebuilt one if given, otherwise build from the transcriptome
 SALMON_INDEX = config["reference"].get("salmon_index") or join(OUTDIR, "00_index", "salmon")
 BUILD_SALMON_INDEX = not config["reference"].get("salmon_index")
@@ -172,6 +181,14 @@ elif QUANTIFIER == "star_salmon":
         _require_reference("gtf")
     _require_reference("transcriptome_fasta")
 
+# The TE path aligns with STAR regardless of which quantifier the gene-level path uses,
+# so it has the same index requirement.
+NEED_STAR_INDEX = (QUANTIFIER == "star_salmon") or TE_ENABLED
+if TE_ENABLED:
+    _require_reference("gtf")
+    if BUILD_STAR_INDEX:
+        _require_reference("genome_fasta")
+
 
 # ----------------------------------------------------------------- target outputs ---
 def final_outputs():
@@ -185,6 +202,10 @@ def final_outputs():
         out.append(join(OUTDIR, "04_de", "dds.rds"))
         out += expand(join(OUTDIR, "04_de", "{contrast}", "results.tsv"),
                       contrast=CONTRAST_NAMES) if CONTRAST_NAMES else []
+    if TE_ENABLED:
+        out += [join(OUTDIR, "06_te", "te_counts.tsv"),
+                join(OUTDIR, "06_te", "counts_combined.tsv"),
+                join(OUTDIR, "06_te", "te_summary.tsv")]
     if config["make_report"]:
         out.append(join(OUTDIR, "05_report", "rnaseq_report.html"))
         if config["report_pdf"]:

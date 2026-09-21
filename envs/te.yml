@@ -1,0 +1,11 @@
+# Transposable element quantification. Kept separate from environment.yml because
+# TEtranscripts pins an older pysam/numpy than the main environment wants, and
+# resolving them together forces avoidable downgrades on the gene-level path.
+name: bulk-rnaseq-te
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - tetranscripts=2.2.4
+  - samtools=1.19

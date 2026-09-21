@@ -25,6 +25,47 @@ rule tx2gene:
     script: "../../scripts/tx2gene.py"
 
 
+# STAR index, built once and shared by the star_salmon quantifier and the TE path.
+# Defined outside the quantifier branch because te.smk needs it even when the
+# gene-level quantifier is salmon.
+if NEED_STAR_INDEX and BUILD_STAR_INDEX:
+    rule star_index:
+        input:
+            genome = config["reference"].get("genome_fasta", ""),
+            gtf = config["reference"].get("gtf", ""),
+        output: directory(STAR_INDEX)
+        log: join(OUTDIR, "logs", "star_index.log")
+        threads: config["threads"]["index"]
+        params:
+            sjdb = config.get("star_sjdb_overhang", 100),
+            # Small genomes need genomeSAindexNbases reduced or STAR silently
+            # produces a broken index; nf-core applies the same correction.
+            extra = config.get("star_index_extra", ""),
+            limit_ram = config.get("star_limit_ram", 0),
+        conda: "../../envs/environment.yml"
+        shell:
+            """
+            set -euo pipefail
+            mkdir -p {output}
+            GENOME_SIZE=$(grep -v '^>' {input.genome} | tr -d '\\n' | wc -c)
+            # STAR's own recommendation: min(14, log2(GenomeLength)/2 - 1)
+            NBASES=$(python3 -c "import math;print(min(14, int(math.log2($GENOME_SIZE)/2 - 1)))")
+            echo "genome size ${{GENOME_SIZE}} -> --genomeSAindexNbases ${{NBASES}}" > {log}
+            RAMARG=""
+            if [ "{params.limit_ram}" != "0" ]; then
+                RAMARG="--limitGenomeGenerateRAM {params.limit_ram}"
+            fi
+            STAR --runMode genomeGenerate \
+                --genomeDir {output} \
+                --genomeFastaFiles {input.genome} \
+                --sjdbGTFfile {input.gtf} \
+                --sjdbOverhang {params.sjdb} \
+                --genomeSAindexNbases ${{NBASES}} \
+                --runThreadN {threads} \
+                ${{RAMARG}} {params.extra} >> {log} 2>&1
+            """
+
+
 if QUANTIFIER == "salmon":
 
     if BUILD_SALMON_INDEX:
@@ -78,43 +119,6 @@ if QUANTIFIER == "salmon":
 
 
 elif QUANTIFIER == "star_salmon":
-
-    if BUILD_STAR_INDEX:
-        rule star_index:
-            input:
-                genome = config["reference"].get("genome_fasta", ""),
-                gtf = config["reference"].get("gtf", ""),
-            output: directory(STAR_INDEX)
-            log: join(OUTDIR, "logs", "star_index.log")
-            threads: config["threads"]["index"]
-            params:
-                sjdb = config.get("star_sjdb_overhang", 100),
-                # Small genomes need genomeSAindexNbases reduced or STAR silently
-                # produces a broken index; nf-core applies the same correction.
-                extra = config.get("star_index_extra", ""),
-                limit_ram = config.get("star_limit_ram", 0),
-            conda: "../../envs/environment.yml"
-            shell:
-                """
-                set -euo pipefail
-                mkdir -p {output}
-                GENOME_SIZE=$(grep -v '^>' {input.genome} | tr -d '\\n' | wc -c)
-                # STAR's own recommendation: min(14, log2(GenomeLength)/2 - 1)
-                NBASES=$(python3 -c "import math;print(min(14, int(math.log2($GENOME_SIZE)/2 - 1)))")
-                echo "genome size ${{GENOME_SIZE}} -> --genomeSAindexNbases ${{NBASES}}" > {log}
-                RAMARG=""
-                if [ "{params.limit_ram}" != "0" ]; then
-                    RAMARG="--limitGenomeGenerateRAM {params.limit_ram}"
-                fi
-                STAR --runMode genomeGenerate \
-                    --genomeDir {output} \
-                    --genomeFastaFiles {input.genome} \
-                    --sjdbGTFfile {input.gtf} \
-                    --sjdbOverhang {params.sjdb} \
-                    --genomeSAindexNbases ${{NBASES}} \
-                    --runThreadN {threads} \
-                    ${{RAMARG}} {params.extra} >> {log} 2>&1
-                """
 
     rule star_align:
         input:

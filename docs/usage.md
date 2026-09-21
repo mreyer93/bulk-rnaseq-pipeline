@@ -97,6 +97,49 @@ order of magnitude more reads than the wrong one.
 
 Needs `pip install lzstring` for the compressed flavour.
 
+## 2d. Three analyses beyond a standard contrast
+
+All optional and all off by default.
+
+*Transposable elements and ERVs.* Set `te_analysis.enabled: true` with a TE GTF from
+section 2b. This aligns separately with STAR at `--outFilterMultimapNmax 100` and counts
+genes and TEs together with TEcount, so both share one size factor. Outputs land in
+`06_te/`: a combined matrix, gene-only and TE-only matrices, and a per-class/per-family
+summary. `te_analysis.exclude_bed` drops regions from the BAM first, which matters more
+than it sounds: a gene-free, repeat-dense window that is duplicated in the assembly will
+otherwise be reported as a large LINE or LTR signal that is an artefact.
+
+*Ordered dose trend.* Set `dose_trend: {column: dose, encoding: ordered}`. A dose series
+carries ordering that two pairwise contrasts discard, and one trend coefficient across
+the whole series is a single test rather than several. Note DESeq2 rejects ordered
+factors in a design formula, so `ordered` ranks the levels and fits the rank as a numeric
+covariate, which is the same linear trend an ordered factor's `.L` contrast would give.
+Use `encoding: numeric` with `transform: log1p` when the doses really are spaced as the
+numbers say.
+
+Benchmarked rather than assumed: on a nine-dose, five-tissue mouse study the trend test
+found more genes than the top-dose-versus-vehicle contrast in two tissues, fewer in two,
+and about the same in one, and each test found genes the other missed in every tissue.
+Run both. Neither dominates, because they answer different questions: monotone movement
+across the series versus a difference at the top dose.
+
+*Cross-tissue concordance.* `scripts/concordance.R` finds genes moving the same way in
+two independent sets of contrasts, which is the analysis behind a peripheral-biomarker
+question ("what changes in blood when this changes in brain?").
+
+```
+Rscript scripts/concordance.R --a brain1.tsv,brain2.tsv --b blood1.tsv,blood2.tsv --outdir out/
+```
+
+It does not simply intersect two FDR-filtered lists. The intersection of two 5% FDR lists
+has no controlled error rate, and reporting it as though it did is common. The primary
+result is an intersection-union test: for a conjunction hypothesis the valid statistic is
+the *maximum* of the component p-values, not a combination of them, so Fisher's or
+Stouffer's method is the wrong tool here and will call genes that move in opposite
+directions. Effect-size correlation and directional agreement are reported alongside,
+because the hit count on its own does not measure shared biology: two tissues with
+thousands of responding genes overlap by arithmetic.
+
 ## 3. Sample sheet
 
 CSV or TSV; the separator is detected. Only a sample-name column and a first-FASTQ column
