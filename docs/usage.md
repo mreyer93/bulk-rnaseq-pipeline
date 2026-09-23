@@ -118,8 +118,9 @@ Use `encoding: numeric` with `transform: log1p` when the doses really are spaced
 numbers say.
 
 Benchmarked rather than assumed: on a nine-dose, five-tissue mouse study the trend test
-found more genes than the top-dose-versus-vehicle contrast in two tissues, fewer in two,
-and about the same in one, and each test found genes the other missed in every tissue.
+found more genes than the top-dose-versus-vehicle contrast in two tissues and fewer in
+three, though one of those three was within 4% and is better read as a tie. Each test
+found genes the other missed in every tissue.
 Run both. Neither dominates, because they answer different questions: monotone movement
 across the series versus a difference at the top dose.
 
