@@ -34,6 +34,10 @@ command -v mamba >/dev/null 2>&1 || CONDA_FLAG="$CONDA_FLAG --conda-frontend con
 # Use every available core by default; set CORES to cap it.
 CORES="${CORES:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 
+# The PDF report needs tectonic, which downloads its TeX support files on first use and
+# caches them. Set REPORT_PDF=0 to skip it (e.g. offline).
+REPORT_PDF=$([[ "${REPORT_PDF:-1}" == "0" ]] && echo false || echo true)
+
 DATA_DIR="test/data"
 REF_DIR="$DATA_DIR/reference"
 FQ_DIR="$DATA_DIR/fastq"
@@ -93,7 +97,7 @@ contrasts:
 alpha: 0.05
 min_count: 5
 make_report: true
-report_pdf: false
+report_pdf: $REPORT_PDF
 threads:
   trim: 2
   index: 2
@@ -125,6 +129,30 @@ if [[ -z "$DRY_RUN" ]]; then
              "$DATA_DIR/results/05_report/rnaseq_report.html"; do
         if [[ -s "$f" ]]; then echo "  OK   $f"; else echo "  MISS $f"; fail=1; fi
     done
+    if [[ "$REPORT_PDF" == "true" ]]; then
+        f="$DATA_DIR/results/05_report/rnaseq_report.pdf"
+        if [[ -s "$f" ]]; then echo "  OK   $f"; else echo "  MISS $f"; fail=1; fi
+    fi
+    # Report content. knitr drops, without any error, output that is not the value of a
+    # top-level expression (this once lost the library-size table), and shows cat() in an
+    # ordinary chunk as "##" console text.
+    if [[ $fail -eq 0 ]]; then
+        if python3 - "$DATA_DIR/results/05_report/rnaseq_report.html" scripts/rnaseq_report.Rmd <<'PY'
+import html, re, sys
+page = html.unescape(open(sys.argv[1], encoding="utf-8").read())
+problems = []
+if "<code>## " in page:
+    problems.append("console output ('##') leaked into the report")
+for cap in re.findall(r'caption = "([^"]*)"', open(sys.argv[2]).read()):
+    if cap not in page:
+        problems.append("table missing: " + cap)
+for p in problems:
+    print("  REPORT " + p)
+sys.exit(1 if problems else 0)
+PY
+        then echo "  OK   report shows every fixed table, no console output"
+        else fail=1; fi
+    fi
     echo
     if [[ $fail -eq 0 ]]; then
         n=$(($(wc -l < "$DATA_DIR/results/03_quant/gene_counts.tsv") - 1))

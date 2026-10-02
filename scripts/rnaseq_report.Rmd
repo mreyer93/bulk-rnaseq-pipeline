@@ -49,8 +49,12 @@ rtheme <- function() {
               strip.background = element_rect(fill = "grey92", colour = NA),
               plot.title = element_text(face = "bold", size = 12))
 }
+# Returned as markdown rather than cat(), which knitr renders in an ordinary chunk as "##"
+# console text. Like any knitr output, it only appears as the value of a top-level
+# expression.
 note_missing <- function(what) {
-    cat("\n*", what, "was not available for this run - this section is omitted.*\n\n")
+    knitr::asis_output(paste0("\n*", what,
+                              ": not available for this run, so this section is omitted.*\n\n"))
 }
 # Point labels: use ggrepel when it happens to be installed, otherwise a nudged
 # geom_text. Keeps ggrepel an optional rather than a required dependency.
@@ -184,14 +188,15 @@ if (is.null(counts)) {
                         genes_detected = colSums(counts > 0),
                         stringsAsFactors = FALSE)
     write_summary(ls_df, "library_sizes")
+    # the value of the top-level if: knitr renders only that, so the table is last here
     kable(ls_df, row.names = FALSE, digits = 0,
           col.names = c("Sample", "Total counts", "Genes detected"),
           caption = "Library size and number of detected genes")
-    print(
-        ggplot(ls_df, aes(x = reorder(sample, total_counts), y = total_counts / 1e6)) +
-            geom_col(fill = PALETTE[3]) + coord_flip() +
-            labs(title = "Library size", x = NULL, y = "Counts (millions)") + rtheme()
-    )
+}
+if (!is.null(counts)) {
+    ggplot(ls_df, aes(x = reorder(sample, total_counts), y = total_counts / 1e6)) +
+        geom_col(fill = PALETTE[3]) + coord_flip() +
+        labs(title = "Library size", x = NULL, y = "Counts (millions)") + rtheme()
 }
 ```
 

@@ -87,7 +87,9 @@ _report_params = dict(
 
 
 rule report_html:
-    input: report_inputs
+    input:
+        deps = report_inputs,
+        rmd = join(SCRIPTS_DIR, "rnaseq_report.Rmd"),  # so editing the template re-renders
     output: join(OUTDIR, "05_report", "rnaseq_report.html")
     log: join(OUTDIR, "logs", "report_html.log")
     params: rmd = join(SCRIPTS_DIR, "rnaseq_report.Rmd"), format = "html_document",
@@ -97,7 +99,9 @@ rule report_html:
 
 
 rule report_pdf:
-    input: report_inputs
+    input:
+        deps = report_inputs,
+        rmd = join(SCRIPTS_DIR, "rnaseq_report.Rmd"),  # so editing the template re-renders
     output: join(OUTDIR, "05_report", "rnaseq_report.pdf")
     log: join(OUTDIR, "logs", "report_pdf.log")
     params: rmd = join(SCRIPTS_DIR, "rnaseq_report.Rmd"), format = "pdf_document",

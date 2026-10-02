@@ -239,7 +239,7 @@ Useful flags: `-k` keep going past failures, `--rerun-incomplete` after an inter
 | STAR killed / out of memory | switch to `quantifier: salmon`, or use a machine with ≥32 GB RAM |
 | "group(s) with no replication" | DESeq2 cannot estimate dispersion from n=1; add replicates or drop that group |
 | Low mapping rate in one sample | contamination, adapter/quality issues, or degraded input; inspect its fastp and FastQC output |
-| PDF report fails, HTML fine | LaTeX/tectonic missing — set `report_pdf: false`, or install `envs/r.yml` fully |
+| PDF report fails, HTML fine | tectonic missing, or rmarkdown older than 2.32 (it looks for the finished PDF in the wrong directory): rebuild `envs/r.yml`, or set `report_pdf: false` |
 
 Every rule writes its own log under `<outdir>/logs/`. On failure, Snakemake names the
 failing rule and its log path; that log almost always contains the actual cause.

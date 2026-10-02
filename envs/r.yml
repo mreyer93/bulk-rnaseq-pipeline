@@ -12,7 +12,7 @@ dependencies:
   - r-ashr            # lfcShrink(type="ashr"): works on arbitrary contrasts
   - r-ggplot2
   - r-knitr
-  - r-rmarkdown
+  - r-rmarkdown>=2.32 # older versions fail the PDF when output_dir is not the .Rmd's directory
   - r-data.table
   - r-ggrepel         # optional; the report falls back to geom_text without it
   - pandoc

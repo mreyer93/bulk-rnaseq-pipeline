@@ -78,9 +78,10 @@ noise, which is the basic sanity check on any RNA-seq result.
 
 ## Full output
 
-The run also produces a self-contained HTML report (`results/05_report/rnaseq_report.html`)
-covering mapping rates, library sizes, sample correlation, PCA, per-contrast volcano and
-MA plots, and ranked gene tables — the artefact you would actually hand to a collaborator.
+The run also produces a self-contained HTML report (`results/05_report/rnaseq_report.html`,
+with a PDF copy alongside) covering mapping rates, library sizes, sample correlation, PCA,
+per-contrast volcano and MA plots, and ranked gene tables — the artefact you would actually
+hand to a collaborator.
 Every figure in it is backed by a TSV in `results/05_report/summary_tables/`.
 
 Selected tables are committed here under [`results/`](results/).
