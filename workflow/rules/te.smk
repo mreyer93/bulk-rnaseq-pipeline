@@ -75,7 +75,7 @@ if TE_ENABLED:
             # TEtranscripts asks for winAnchorMultimapNmax to match outFilterMultimapNmax,
             # otherwise the anchor search caps the multimapping the filter would allow.
             extra = TE_CFG.get("star_extra", ""),
-        conda: "../../envs/environment.yml"
+        conda: "../../envs/star.yml"
         shell:
             """
             STAR --genomeDir {input.index} \
@@ -87,6 +87,13 @@ if TE_ENABLED:
                 --winAnchorMultimapNmax {params.nmax} \
                 --outSAMattributes NH HI AS nM \
                 --runThreadN {threads} {params.extra} > {log} 2>&1
+            # STAR can exit 0 having read nothing (the osx-arm64 bioconda builds do exactly
+            # that), so check the read count instead of trusting the exit status.
+            NREADS=$(awk -F'|' '/Number of input reads/ {{gsub(/[ \t]/, "", $2); print $2}}' {output.log_final})
+            if [ "${{NREADS:-0}}" -eq 0 ]; then
+                echo "STAR read zero input reads for {wildcards.sample}; see {log}" >&2
+                exit 1
+            fi
             """
 
     rule te_filter_bam:

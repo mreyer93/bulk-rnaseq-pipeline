@@ -42,7 +42,7 @@ if NEED_STAR_INDEX and BUILD_STAR_INDEX:
             # produces a broken index; nf-core applies the same correction.
             extra = config.get("star_index_extra", ""),
             limit_ram = config.get("star_limit_ram", 0),
-        conda: "../../envs/environment.yml"
+        conda: "../../envs/star.yml"
         shell:
             """
             set -euo pipefail
@@ -133,7 +133,7 @@ elif QUANTIFIER == "star_salmon":
         params:
             prefix = join(OUTDIR, "03_quant", "star", "{sample}."),
             extra = config.get("star_align_extra", ""),
-        conda: "../../envs/environment.yml"
+        conda: "../../envs/star.yml"
         shell:
             """
             STAR --genomeDir {input.index} \
@@ -143,6 +143,13 @@ elif QUANTIFIER == "star_salmon":
                 --outSAMtype BAM SortedByCoordinate \
                 --quantMode TranscriptomeSAM \
                 --runThreadN {threads} {params.extra} > {log} 2>&1
+            # STAR can exit 0 having read nothing (the osx-arm64 bioconda builds do exactly
+            # that), so check the read count instead of trusting the exit status.
+            NREADS=$(awk -F'|' '/Number of input reads/ {{gsub(/[ \t]/, "", $2); print $2}}' {output.log_final})
+            if [ "${{NREADS:-0}}" -eq 0 ]; then
+                echo "STAR read zero input reads for {wildcards.sample}; see {log}" >&2
+                exit 1
+            fi
             """
 
     rule salmon_quant_bam:

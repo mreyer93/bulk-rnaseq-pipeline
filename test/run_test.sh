@@ -26,7 +26,13 @@ DRY_RUN=""
 # Snakemake manages the conda envs by default. Set USE_CONDA=0 if the tools are already
 # on PATH (e.g. you created envs/environment.yml and envs/r.yml yourself).
 CONDA_FLAG="--use-conda"
+# Snakemake 7 defaults to mamba. Plain conda has used the same libmamba solver since
+# 23.10, so fall back to it when mamba is not installed (e.g. a stock Anaconda).
+command -v mamba >/dev/null 2>&1 || CONDA_FLAG="$CONDA_FLAG --conda-frontend conda"
 [[ "${USE_CONDA:-1}" == "0" ]] && CONDA_FLAG=""
+
+# Use every available core by default; set CORES to cap it.
+CORES="${CORES:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}"
 
 DATA_DIR="test/data"
 REF_DIR="$DATA_DIR/reference"
@@ -96,7 +102,7 @@ EOF
 echo "==> Running pipeline"
 snakemake -s workflow/Snakefile \
     --configfile "$DATA_DIR/config_test.yaml" \
-    --cores "${CORES:-4}" \
+    --cores "$CORES" \
     $CONDA_FLAG \
     $DRY_RUN
 

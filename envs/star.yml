@@ -1,0 +1,14 @@
+# STAR genomic alignment, for the star_salmon quantifier and the TE path.
+# Kept separate from environment.yml because STAR's only osx-arm64 version (2.7.11b) is
+# linked against htslib 1.21-1.22, which conflicts with samtools 1.23 and fastp 1.3 on
+# Apple Silicon. Linux resolves either way; keeping one layout for every platform.
+# Note that the osx-arm64 STAR build reads zero reads (see docs/usage.md), so on an
+# M-series Mac this env installs but STAR does not work; use quantifier "salmon" there.
+# python is here for the genomeSAindexNbases calculation in star_index.
+name: bulk-rnaseq-star
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - star=2.7
+  - python>=3.10

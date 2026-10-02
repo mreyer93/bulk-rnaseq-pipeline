@@ -11,6 +11,23 @@ The R/Bioconductor stack (DESeq2, tximport, report rendering) lives in a second
 environment, `envs/r.yml`. With `--use-conda` Snakemake creates and uses both
 automatically; otherwise create it yourself and make sure `Rscript` is on `PATH`.
 
+STAR (`star_salmon` and the TE path) and TEtranscripts have their own environments,
+`envs/star.yml` and `envs/te.yml`, built the same way. STAR is separate because its only
+Apple Silicon version is linked against an older htslib than samtools 1.23 and fastp 1.3
+need, so the three cannot share one environment on an M-series Mac. Without
+`--use-conda`, put `STAR` and `TEcount` on `PATH` yourself.
+
+That separation only lets the main environment install. Bioconda's STAR does not itself
+work on Apple Silicon: tested on an M1 Max under macOS 27, both osx-arm64 builds of 2.7.11b
+exited successfully having read zero reads, and `--quantMode TranscriptomeSAM` failed
+outright (STAR issues [#2663](https://github.com/alexdobin/STAR/issues/2663) and
+[#2142](https://github.com/alexdobin/STAR/issues/2142)). Both STAR rules now stop with an
+error when STAR reads nothing, rather than passing empty alignments downstream. On an
+M-series Mac use `quantifier: "salmon"`, and run `star_salmon` or the TE path on Linux.
+
+Snakemake 7 asks for `mamba` by default. On a stock Anaconda install, which ships conda
+but not mamba, add `--conda-frontend conda`; conda has used the same solver since 23.10.
+
 ## 2. References
 
 You need, from **the same annotation release**:
