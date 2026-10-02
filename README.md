@@ -12,15 +12,20 @@ fastp -> Salmon (or STAR + Salmon) -> tximport -> DESeq2 -> HTML/PDF report
 
 | | `quantifier: salmon` | `quantifier: star_salmon` |
 |---|---|---|
-| Method | Selective alignment from FASTQ | STAR genomic alignment, then Salmon |
-| RAM (human) | ~4-8 GB | ~30-40 GB |
+| Method | Selective alignment from FASTQ, decoy-aware index | STAR genomic alignment, then Salmon |
+| RAM (human) | ~14-18 GB to build the index (~4-8 GB with `salmon_decoys: false`) | ~30-40 GB |
 | Extra outputs | - | coordinate-sorted genomic BAM, splice junctions |
-| Intended for | laptops, small servers | cloud VMs, compute servers |
+| Runs on | Linux, macOS including Apple Silicon | Linux, or a Linux VM on a Mac (`scripts/linux_vm.sh`) |
+| Intended for | laptops, workstations, small servers | cloud VMs, compute servers |
 | Config | [`config/config_local.yaml`](config/config_local.yaml) | [`config/config_cloud.yaml`](config/config_cloud.yaml) |
 
-Both converge on the same gene counts, so downstream analysis, figures and the report are
-identical. The split exists because a STAR human index does not fit in 16 GB of RAM —
-this is the single biggest practical constraint in bulk RNA-seq on a laptop.
+Both write the same per-sample `quant.sf`, so downstream analysis, figures and the report
+are identical. The Salmon index is decoy-aware by default (transcriptome plus the whole
+genome, as in nf-core/rnaseq), and with it Salmon alone was at least as accurate as
+STAR -> Salmon in [Srivastava et al. 2020](https://doi.org/10.1186/s13059-020-02151-8). The
+reason to run `star_salmon` is its genomic BAM, not better counts. It needs a STAR human
+index (~30 GB of RAM) and Linux: bioconda's Apple Silicon STAR reads zero reads, so on a
+Mac `scripts/linux_vm.sh` runs those paths in a Linux VM (see [docs/usage.md](docs/usage.md)).
 
 ## Quickstart
 

@@ -84,6 +84,7 @@ quantifier: "salmon"
 trimmer: "fastp"
 reference:
   transcriptome_fasta: "$REPO_ROOT/$REF_DIR/transcriptome.fasta"
+  genome_fasta: "$REPO_ROOT/$REF_DIR/genome.fa"   # decoys for the salmon index (salmon_decoys, on by default)
   gtf: "$REPO_ROOT/$REF_DIR/genes.gtf"
 design: "condition"
 contrasts:

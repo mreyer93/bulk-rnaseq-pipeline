@@ -39,17 +39,18 @@ quantified. That keeps the test fast; the pipeline itself is not restricted in a
 ## What ran
 
 ```
-fastp → Salmon (selective alignment) → tximport → DESeq2 → report
+fastp → Salmon (selective alignment, decoy-aware index) → tximport → DESeq2 → report
 ```
 
 Salmon auto-detected the library type per sample, correctly identifying `ISR` for the
-paired-end libraries and `SR` for the single-end ones. Mapping rates were 80–85% across
-all six samples, and the two multi-lane samples show roughly double the reads of the
+paired-end libraries and `SR` for the single-end ones. Mapping rates were 79–80% across
+all six samples (the decoy-aware index sets aside reads that fit the genome better than any
+transcript), and the two multi-lane samples show roughly double the reads of the
 others — confirming the lane-merging worked.
 
 ## Results
 
-**Samples group by condition.** PC1 captures 90.3% of the variance and separates
+**Samples group by condition.** PC1 captures 91.0% of the variance and separates
 RAP1-depleted, uninduced and wild type into three clean clusters.
 
 ![PCA](figures/pca.png)
@@ -64,8 +65,8 @@ interesting result: the degron strain differs from wild type even before auxin i
 
 | Contrast | Genes tested | Significant (adj. p < 0.05) |
 |---|---|---|
-| `RAP1_UNINDUCED` vs `WT` | 78 | 39 |
-| `RAP1_IAA_30M` vs `WT` | 78 | 5 |
+| `RAP1_UNINDUCED` vs `WT` | 63 | 30 |
+| `RAP1_IAA_30M` vs `WT` | 85 | 5 |
 
 The top hits are recognisable yeast genes — `SSA1` (heat-shock chaperone), `CDC19`
 (pyruvate kinase), `CCR4` (mRNA deadenylase), `ERV46` (ER–Golgi transport) — rather than

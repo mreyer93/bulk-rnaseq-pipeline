@@ -115,6 +115,22 @@ ALL_PAIRED = all(is_paired(s) for s in SAMPLE_NAMES)
 ANY_PAIRED = any(is_paired(s) for s in SAMPLE_NAMES)
 
 
+# Salmon library type per sample, from the sample sheet's strandedness column (as in
+# nf-core/rnaseq). "auto" is -l A, Salmon's own detection. A salmon_libtype in the config
+# applies one type to every sample and overrides the sheet.
+_SALMON_LIBTYPE = {"reverse": ("ISR", "SR"), "forward": ("ISF", "SF"), "unstranded": ("IU", "U")}
+
+
+def salmon_libtype(wildcards):
+    if config.get("salmon_libtype"):
+        return config["salmon_libtype"]
+    strand = SAMPLES[wildcards.sample]["strandedness"]
+    if strand == "auto":
+        return "A"
+    paired, single = _SALMON_LIBTYPE[strand]
+    return paired if is_paired(wildcards.sample) else single
+
+
 def raw_fastqs(wildcards, mate=1):
     """All FASTQ files for one sample and mate, in sample sheet order."""
     key = "fastq_1" if mate == 1 else "fastq_2"
@@ -167,12 +183,26 @@ TE_ENABLED = bool(TE_CFG.get("enabled", False))
 SALMON_INDEX = config["reference"].get("salmon_index") or join(OUTDIR, "00_index", "salmon")
 BUILD_SALMON_INDEX = not config["reference"].get("salmon_index")
 
+# Decoy-aware Salmon index: the whole genome is indexed after the transcripts, so a read
+# from an intron or an unannotated locus is recognised as genomic instead of being forced
+# onto the nearest transcript. nf-core/rnaseq builds its index this way by default, and
+# Srivastava et al. 2020 (Genome Biology) found it at least as accurate as STAR -> Salmon.
+# It needs the genome FASTA and roughly 14-18 GB of RAM to build for human.
+SALMON_DECOYS = bool(config.get("salmon_decoys", True))
+
 STAR_INDEX = config["reference"].get("star_index") or join(OUTDIR, "00_index", "star")
 BUILD_STAR_INDEX = not config["reference"].get("star_index")
 
 if QUANTIFIER == "salmon":
     if BUILD_SALMON_INDEX:
         _require_reference("transcriptome_fasta")
+        if SALMON_DECOYS and not config["reference"].get("genome_fasta"):
+            raise WorkflowError(
+                "salmon_decoys is on (the default, as in nf-core/rnaseq) and needs "
+                "reference.genome_fasta from the same release as the transcriptome. Set it, "
+                "or set salmon_decoys: false to index the transcriptome alone.")
+        if SALMON_DECOYS:
+            _require_reference("genome_fasta")
     _require_reference("gtf")  # needed for tx2gene
 elif QUANTIFIER == "star_salmon":
     if BUILD_STAR_INDEX:
@@ -180,6 +210,18 @@ elif QUANTIFIER == "star_salmon":
     else:
         _require_reference("gtf")
     _require_reference("transcriptome_fasta")
+    # Salmon's alignment mode does not detect the library type of a single-end sample: it
+    # stays "A" and every read is counted whatever its strand. On the smoke-test data a
+    # reverse-stranded single-end library had 5,926 sense-strand reads (13%) counted that
+    # mapping mode, which detects the type correctly, excluded.
+    if not config.get("salmon_libtype"):
+        undetectable = [s for s in SAMPLE_NAMES
+                        if not is_paired(s) and SAMPLES[s]["strandedness"] == "auto"]
+        if undetectable:
+            raise WorkflowError(
+                "quantifier star_salmon cannot auto-detect strandedness for single-end "
+                f"samples ({', '.join(undetectable)}). Set their strandedness column to "
+                "reverse, forward or unstranded in the sample sheet, or use quantifier salmon.")
 
 # The TE path aligns with STAR regardless of which quantifier the gene-level path uses,
 # so it has the same index requirement.

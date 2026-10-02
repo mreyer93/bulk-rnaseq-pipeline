@@ -1,8 +1,10 @@
 # Local / laptop configuration.
 #
-# Uses Salmon selective alignment straight from FASTQ (~4-8 GB RAM for human), which is
-# what makes this runnable on a machine that cannot host a STAR index. STAR needs roughly
-# 30 GB of RAM for a human genome - see config_cloud.yaml for that path.
+# Uses Salmon selective alignment straight from FASTQ, which is what makes this runnable
+# on a machine that cannot host a STAR index (STAR needs roughly 30 GB of RAM for a human
+# genome; see config_cloud.yaml for that path). The Salmon index is decoy-aware by default,
+# as in nf-core/rnaseq: building it for human takes roughly 14-18 GB of RAM. On a 16 GB
+# machine set salmon_decoys: false, which indexes the transcriptome alone in ~4-8 GB.
 #
 # Copy this file, point the paths at your data, and run:
 #   snakemake --configfile my_config.yaml --use-conda --cores 4
@@ -22,12 +24,21 @@ quantifier: "salmon"          # salmon | star_salmon
 trimmer: "fastp"              # fastp | none
 
 reference:
-  # REQUIRED for the salmon path: transcriptome FASTA (cDNA) and the matching GTF.
-  # Both must come from the same annotation release - see docs/usage.md.
+  # REQUIRED for the salmon path: transcriptome FASTA (cDNA), the genome FASTA it was
+  # annotated on (used as decoys, see salmon_decoys below) and the matching GTF. All three
+  # must come from the same release - see docs/usage.md. Use the primary assembly, without
+  # alt haplotypes or patches.
   transcriptome_fasta: "/path/to/reference/transcriptome.fa"
+  genome_fasta: "/path/to/reference/genome.fa"
   gtf: "/path/to/reference/annotation.gtf"
   # Optional: reuse a prebuilt Salmon index instead of building one each run
   # salmon_index: "/path/to/reference/salmon_index"
+
+# Decoy-aware Salmon index: the genome is indexed behind the transcripts, so reads from
+# introns and unannotated loci are recognised as genomic instead of being forced onto a
+# transcript. Matches nf-core/rnaseq; Srivastava et al. 2020 (Genome Biology) found it at
+# least as accurate as STAR -> Salmon. Set false on a machine with under ~18 GB of RAM.
+salmon_decoys: true
 
 # Set true when transcript IDs carry version suffixes in one file but not the other
 # (e.g. ENST00000123.4 vs ENST00000123)

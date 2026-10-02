@@ -1,7 +1,9 @@
 """Quantification. Two interchangeable paths, chosen by config['quantifier']:
 
-  salmon       selective alignment straight from FASTQ against a transcriptome index.
-               ~4-8 GB RAM for human. This is the local/laptop path.
+  salmon       selective alignment straight from FASTQ. By default the index is decoy-
+               aware (transcriptome plus the whole genome, as in nf-core/rnaseq), which
+               needs ~14-18 GB RAM to build for human; salmon_decoys: false indexes the
+               transcriptome alone in ~4-8 GB. Runs natively on Apple Silicon.
 
   star_salmon  STAR genomic alignment, then Salmon quantification of the resulting
                transcriptome BAM. This is nf-core/rnaseq's default and gives you a
@@ -68,7 +70,48 @@ if NEED_STAR_INDEX and BUILD_STAR_INDEX:
 
 if QUANTIFIER == "salmon":
 
-    if BUILD_SALMON_INDEX:
+    if BUILD_SALMON_INDEX and SALMON_DECOYS:
+        rule salmon_gentrome:
+            """Transcripts then genome in one FASTA, plus the genome's sequence names as decoys.
+
+            Salmon requires the decoy records to come last. gzip -dcf decompresses .gz and
+            passes plain FASTA through, so either form works for either input.
+            """
+            input:
+                txome = config["reference"].get("transcriptome_fasta", ""),
+                genome = config["reference"].get("genome_fasta", ""),
+            output:
+                gentrome = temp(join(OUTDIR, "00_index", "salmon_gentrome.fa")),
+                decoys = join(OUTDIR, "00_index", "salmon_decoys.txt"),
+            shell:
+                """
+                set -euo pipefail
+                gzip -dcf {input.genome} | awk '/^>/ {{sub(/^>/, ""); print $1}}' > {output.decoys}
+                {{ gzip -dcf {input.txome}; gzip -dcf {input.genome}; }} > {output.gentrome}
+                """
+
+        rule salmon_index:
+            input:
+                gentrome = rules.salmon_gentrome.output.gentrome,
+                decoys = rules.salmon_gentrome.output.decoys,
+            output: directory(SALMON_INDEX)
+            log: join(OUTDIR, "logs", "salmon_index.log")
+            threads: config["threads"]["index"]
+            params:
+                kmer = config.get("salmon_kmer", 31),
+                gencode = "--gencode" if config.get("gencode", False) else "",
+            conda: "../../envs/environment.yml"
+            shell:
+                """
+                salmon index \
+                    -t {input.gentrome} \
+                    -d {input.decoys} \
+                    -i {output} \
+                    -k {params.kmer} \
+                    -p {threads} {params.gencode} > {log} 2>&1
+                """
+
+    elif BUILD_SALMON_INDEX:
         rule salmon_index:
             input:
                 txome = config["reference"].get("transcriptome_fasta", ""),
@@ -104,7 +147,7 @@ if QUANTIFIER == "salmon":
         params:
             reads_arg = _salmon_reads_arg,
             outdir = join(OUTDIR, "03_quant", "salmon", "{sample}"),
-            libtype = config.get("salmon_libtype", "A"),  # A = auto-detect strandedness
+            libtype = salmon_libtype,  # per sample, from the sheet's strandedness column
             extra = config.get("salmon_extra", "--validateMappings --seqBias --gcBias"),
         conda: "../../envs/environment.yml"
         shell:
@@ -121,6 +164,15 @@ if QUANTIFIER == "salmon":
 elif QUANTIFIER == "star_salmon":
 
     rule star_align:
+        """STAR with nf-core/rnaseq's arguments for its star_salmon route
+        (conf/modules/align_star.config).
+
+        --quantTranscriptomeSAMoutput BanSingleEnd keeps soft-clipped and indel-containing
+        alignments in the transcriptome BAM, which Salmon handles. STAR's default
+        (BanSingleEnd_BanIndels_ExtendSoftclip) is the RSEM setting and drops them: on the
+        smoke-test data it left Salmon 70-71% of paired-end fragments, against 75-77% with
+        BanSingleEnd.
+        """
         input:
             reads = quant_input,
             index = STAR_INDEX,
@@ -142,6 +194,13 @@ elif QUANTIFIER == "star_salmon":
                 --outFileNamePrefix {params.prefix} \
                 --outSAMtype BAM SortedByCoordinate \
                 --quantMode TranscriptomeSAM \
+                --quantTranscriptomeSAMoutput BanSingleEnd \
+                --twopassMode Basic \
+                --runRNGseed 0 \
+                --outFilterMultimapNmax 20 \
+                --alignSJDBoverhangMin 1 \
+                --outSAMstrandField intronMotif \
+                --outSAMattributes NH HI AS NM MD \
                 --runThreadN {threads} {params.extra} > {log} 2>&1
             # STAR can exit 0 having read nothing (the osx-arm64 bioconda builds do exactly
             # that), so check the read count instead of trusting the exit status.
@@ -163,7 +222,9 @@ elif QUANTIFIER == "star_salmon":
         threads: config["threads"]["quant"]
         params:
             outdir = join(OUTDIR, "03_quant", "salmon", "{sample}"),
-            libtype = config.get("salmon_libtype", "A"),
+            libtype = salmon_libtype,
+            # the same bias models as the FASTQ route, so the two quantifiers stay comparable
+            extra = config.get("salmon_bam_extra", "--seqBias --gcBias"),
         conda: "../../envs/environment.yml"
         shell:
             """
@@ -172,7 +233,7 @@ elif QUANTIFIER == "star_salmon":
                 -l {params.libtype} \
                 -a {input.bam} \
                 -o {params.outdir} \
-                -p {threads} > {log} 2>&1
+                -p {threads} {params.extra} > {log} 2>&1
             """
 
 

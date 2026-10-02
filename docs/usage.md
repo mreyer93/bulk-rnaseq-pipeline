@@ -23,7 +23,16 @@ exited successfully having read zero reads, and `--quantMode TranscriptomeSAM` f
 outright (STAR issues [#2663](https://github.com/alexdobin/STAR/issues/2663) and
 [#2142](https://github.com/alexdobin/STAR/issues/2142)). Both STAR rules now stop with an
 error when STAR reads nothing, rather than passing empty alignments downstream. On an
-M-series Mac use `quantifier: "salmon"`, and run `star_salmon` or the TE path on Linux.
+M-series Mac use `quantifier: "salmon"`, and run `star_salmon` or the TE path on Linux or in a
+Linux VM: `scripts/linux_vm.sh setup` once, then `scripts/linux_vm.sh run --configfile
+my_config.yaml --cores 8`. It uses Lima (no administrator rights) and bioconda's unmodified
+Linux STAR; both STAR paths run end to end that way on the test data.
+
+Strandedness comes from the sample sheet's `strandedness` column (`auto`, `reverse`,
+`forward`, `unstranded`), as in nf-core/rnaseq. `auto` lets Salmon detect it, which works for
+both layouts with `quantifier: salmon`. Salmon's alignment mode, used by `star_salmon`, does
+not detect it for single-end samples and would count both strands, so `star_salmon` stops
+with an error until single-end samples have it set.
 
 Snakemake 7 asks for `mamba` by default. On a stock Anaconda install, which ships conda
 but not mamba, add `--conda-frontend conda`; conda has used the same solver since 23.10.
@@ -193,7 +202,8 @@ Copy `config/config_local.yaml` (Salmon, laptop-sized) or `config/config_cloud.y
 
 | Option | Meaning |
 |---|---|
-| `quantifier` | `salmon` (~4-8 GB RAM) or `star_salmon` (~30-40 GB RAM) |
+| `quantifier` | `salmon` (~14-18 GB RAM to build its decoy-aware index) or `star_salmon` (~30-40 GB RAM, Linux) |
+| `salmon_decoys` | `true` (default, as in nf-core/rnaseq) indexes the genome behind the transcriptome; needs `reference.genome_fasta`. `false` indexes the transcriptome alone in ~4-8 GB |
 | `design` | DESeq2 formula over sample sheet columns; variable of interest **last** |
 | `contrasts` | list of `[factor, numerator, denominator]`; log2FC is numerator vs denominator |
 | `alpha` | adjusted-p threshold (default 0.05) |
